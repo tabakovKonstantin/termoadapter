@@ -1,5 +1,6 @@
 package ru.tabakov.termoadapter;
 
+import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.WebApplicationType;
@@ -7,9 +8,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Scope;
 import org.springframework.integration.annotation.MessagingGateway;
 import org.springframework.integration.annotation.ServiceActivator;
-import org.springframework.integration.channel.DirectChannel;
+import org.springframework.integration.channel.PublishSubscribeChannel;
 import org.springframework.integration.core.MessageProducer;
 import org.springframework.integration.mqtt.core.DefaultMqttPahoClientFactory;
 import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
@@ -36,27 +38,29 @@ public class TermoadapterApplication {
 
     @Bean
     public MessageChannel mqttInputChannel() {
-        return new DirectChannel();
+        return new PublishSubscribeChannel();
     }
 
     @Bean
     public MessageChannel mqttOutboundChannel() {
-        return new DirectChannel();
+        return new PublishSubscribeChannel();
     }
 
     @Bean
     public MessageProducer inbound() {
         MqttPahoMessageDrivenChannelAdapter adapter =
-                new MqttPahoMessageDrivenChannelAdapter("tcp://localhost:1883", "testClient",
-                        "topic1", "topic2");
+                new MqttPahoMessageDrivenChannelAdapter(MqttAsyncClient.generateClientId(), mqttClientFactory(),
+                        "/lytko/0/thermostat/2693064/data");
         adapter.setCompletionTimeout(5000);
         adapter.setConverter(new DefaultPahoMessageConverter());
-        adapter.setQos(1);
+        adapter.setQos(0);
         adapter.setOutputChannel(mqttInputChannel());
         return adapter;
     }
 
+
     @Bean
+    @Scope("singleton")
     public MqttPahoClientFactory mqttClientFactory() {
         DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
         MqttConnectOptions options = new MqttConnectOptions();
@@ -67,8 +71,15 @@ public class TermoadapterApplication {
         return factory;
     }
 
+//    @Bean
+//    @Transformer(inputChannel="mqttInputChannel", //Объявляем transformer
+//            outputChannel="mqttOutboundChannel")
+//    public GenericTransformer<String, String> upperCaseTransformer() {
+//        return text -> text.toUpperCase();
+//    }
+
     @Bean
-    @ServiceActivator(inputChannel = "mqttInputChannel")
+    @ServiceActivator(inputChannel = "mqttInputChannel", outputChannel = "mqttOutboundChannel")
     public MessageHandler handler() {
         return new MyHandler();
     }
@@ -80,17 +91,20 @@ public class TermoadapterApplication {
         @Override
         public void handleMessage(Message<?> message) throws MessagingException {
             System.out.println(message.getPayload());
-            gateway.sendToMqtt(message.getPayload().toString());
+            mqttOutboundChannel().send(message);
+//            gateway.sendToMqtt(message.getPayload().toString());
+
         }
+
     }
 
     @Bean
     @ServiceActivator(inputChannel = "mqttOutboundChannel")
     public MessageHandler mqttOutbound() {
         MqttPahoMessageHandler messageHandler =
-                new MqttPahoMessageHandler("testClient2", mqttClientFactory());
-        messageHandler.setAsync(true);
-        messageHandler.setDefaultTopic("testTopic");
+                new MqttPahoMessageHandler(MqttAsyncClient.generateClientId(), mqttClientFactory());
+        messageHandler.setAsync(false);
+        messageHandler.setDefaultTopic("test");
         return messageHandler;
     }
 
