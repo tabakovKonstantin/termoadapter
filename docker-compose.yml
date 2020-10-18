@@ -1,0 +1,33 @@
+version: '3.3'
+services:
+  mosquitto:
+    image: eclipse-mosquitto
+    hostname: mosquitto
+    container_name: mosquitto
+    expose:
+      - "1883"
+      - "9001"
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      - default    
+  termoadapter:
+    build: ./termoadapter
+    hostname: termoadapter
+    container_name: termoadapter
+    environment:
+      - broker-url=mosquitto
+      - broker-port=1883
+      - inboundTopic=inTopicTest
+      - outboundTopic=outTopicQWER
+    networks:
+      - default 
+    depends_on:
+      - mosquitto
+
+networks:
+  default:
+    driver: bridge
