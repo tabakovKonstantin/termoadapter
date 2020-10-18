@@ -2,6 +2,7 @@ package ru.tabakov.termoadapter;
 
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +23,18 @@ import org.springframework.messaging.MessageHandler;
 @ComponentScan
 public class ApplicationContextConfiguration {
 
+    @Value("${broker-url}")
+    private String brokerUrl;
+
+    @Value("${broker-port}")
+    private String brokerPort;
+
+    @Value("${inbound-topic}")
+    private String inboundTopic;
+
+    @Value("${outbound-topic}")
+    private String outboundTopic;
+
     @Bean
     public MessageChannel mqttInboundChannel() {
         return new PublishSubscribeChannel();
@@ -35,9 +48,9 @@ public class ApplicationContextConfiguration {
     @Bean
     public MessageProducer mqttInbound() {
         MqttPahoMessageDrivenChannelAdapter adapter =
-                new MqttPahoMessageDrivenChannelAdapter(MqttAsyncClient.generateClientId(), mqttClientFactory(),
-//                        "/lytko/0/thermostat/2693064/data");
-                        "topic1");
+                new MqttPahoMessageDrivenChannelAdapter(MqttAsyncClient.generateClientId(),
+                        mqttClientFactory(),
+                        inboundTopic);
         adapter.setCompletionTimeout(5000);
         adapter.setConverter(new DefaultPahoMessageConverter());
         adapter.setQos(0);
@@ -57,7 +70,7 @@ public class ApplicationContextConfiguration {
         MqttPahoMessageHandler messageHandler =
                 new MqttPahoMessageHandler(MqttAsyncClient.generateClientId(), mqttClientFactory());
         messageHandler.setAsync(false);
-        messageHandler.setDefaultTopic("test");
+        messageHandler.setDefaultTopic(outboundTopic);
         return messageHandler;
     }
 
@@ -72,7 +85,7 @@ public class ApplicationContextConfiguration {
     public MqttPahoClientFactory mqttClientFactory() {
         DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
         MqttConnectOptions options = new MqttConnectOptions();
-        options.setServerURIs(new String[]{"tcp://localhost:1883"});
+        options.setServerURIs(new String[]{"tcp://" + brokerUrl + ":" + brokerPort});
 //		options.setUserName("username");
 //		options.setPassword("password".toCharArray());
         factory.setConnectionOptions(options);
